@@ -157,104 +157,114 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             Ok((mut socket, _peer_addr)) => {
                 velocity_mq::metrics::inc_active_connections();
                 let _ = socket.set_nodelay(true);
-                let _ = socket.set_read_timeout(Some(Duration::from_millis(500)));
+                let _ = socket.set_read_timeout(Some(Duration::from_secs(5)));
 
-                let mut size_buf = [0u8; 4];
-                if socket.read_exact(&mut size_buf).is_ok() {
+                while running.load(Ordering::Relaxed) {
+                    let mut size_buf = [0u8; 4];
+                    if socket.read_exact(&mut size_buf).is_err() {
+                        break;
+                    }
+
                     let frame_size = i32::from_be_bytes(size_buf) as usize;
-                    if frame_size > 0 && frame_size < 32 * 1024 * 1024 {
-                        let mut frame_buf = vec![0u8; frame_size];
-                        if socket.read_exact(&mut frame_buf).is_ok() {
-                            let mut full_frame = BytesMut::with_capacity(4 + frame_size);
-                            full_frame.extend_from_slice(&size_buf);
-                            full_frame.extend_from_slice(&frame_buf);
+                    if frame_size == 0 || frame_size > 32 * 1024 * 1024 {
+                        break;
+                    }
 
-                            let frame_bytes = full_frame.freeze();
+                    let mut frame_buf = vec![0u8; frame_size];
+                    if socket.read_exact(&mut frame_buf).is_err() {
+                        break;
+                    }
 
-                            // Attempt to parse Kafka request
-                            if let Ok(produce_req) =
-                                KafkaDecoder::decode_produce_request(frame_bytes.clone())
-                            {
-                                // Route produce request with developer mode auto-topic creation
-                                let _routes = router.route_produce_request_with_dev_mode(
-                                    0,
-                                    1,
-                                    &produce_req,
-                                    &metadata,
-                                    is_dev_mode,
-                                );
+                    let mut full_frame = BytesMut::with_capacity(4 + frame_size);
+                    full_frame.extend_from_slice(&size_buf);
+                    full_frame.extend_from_slice(&frame_buf);
 
-                                let mut topic_responses = Vec::new();
+                    let frame_bytes = full_frame.freeze();
 
-                                for topic_data in &produce_req.topic_data {
-                                    let mut partition_responses = Vec::new();
-                                    for part_data in &topic_data.partitions {
-                                        // Write payload to Segmented Log / Raft
-                                        let record_bytes = part_data.records.clone();
-                                        let write_res = if is_dev_mode {
-                                            // Developer mode: Local flush and immediate commit
-                                            segmented_log.append(&record_bytes)
-                                        } else {
-                                            // Cluster mode: Quorum replication via Raft
-                                            segmented_log.append(&record_bytes)
-                                        };
+                    // Attempt to parse Kafka request
+                    if let Ok(produce_req) =
+                        KafkaDecoder::decode_produce_request(frame_bytes.clone())
+                    {
+                        // Route produce request with developer mode auto-topic creation
+                        let _routes = router.route_produce_request_with_dev_mode(
+                            0,
+                            1,
+                            &produce_req,
+                            &metadata,
+                            is_dev_mode,
+                        );
 
-                                        match write_res {
-                                            Ok(res) => {
-                                                velocity_mq::metrics::inc_messages_produced(1);
-                                                velocity_mq::metrics::inc_bytes_written(record_bytes.len() as u64);
-                                                partition_responses.push(
-                                                    PartitionProduceResponse {
-                                                        partition: part_data.partition,
-                                                        error_code: KafkaErrorCode::None,
-                                                        base_offset: res.record_offset as i64,
-                                                        log_append_time_ms: -1,
-                                                        log_start_offset: 0,
-                                                    },
-                                                );
-                                                _next_offset = res.record_offset + 1;
-                                            }
-                                            Err(_) => {
-                                                partition_responses.push(
-                                                    PartitionProduceResponse {
-                                                        partition: part_data.partition,
-                                                        error_code:
-                                                            KafkaErrorCode::CorruptMessage,
-                                                        base_offset: -1,
-                                                        log_append_time_ms: -1,
-                                                        log_start_offset: 0,
-                                                    },
-                                                );
-                                            }
-                                        }
-                                    }
+                        let mut topic_responses = Vec::new();
 
-                                    topic_responses.push(TopicProduceResponse {
-                                        topic: topic_data.topic.clone(),
-                                        partitions: partition_responses,
-                                    });
-                                }
-
-                                let produce_resp = ProduceResponse {
-                                    correlation_id: produce_req.header.correlation_id,
-                                    responses: topic_responses,
-                                    throttle_time_ms: 0,
+                        for topic_data in &produce_req.topic_data {
+                            let mut partition_responses = Vec::new();
+                            for part_data in &topic_data.partitions {
+                                // Write payload to Segmented Log / Raft
+                                let record_bytes = part_data.records.clone();
+                                let write_res = if is_dev_mode {
+                                    // Developer mode: Local flush and immediate commit
+                                    segmented_log.append(&record_bytes)
+                                } else {
+                                    // Cluster mode: Quorum replication via Raft
+                                    segmented_log.append(&record_bytes)
                                 };
 
-                                let mut resp_buf = BytesMut::with_capacity(128);
-                                KafkaEncoder::encode_produce_response(
-                                    &produce_resp,
-                                    &mut resp_buf,
-                                );
-                                let _ = socket.write_all(&resp_buf);
+                                match write_res {
+                                    Ok(res) => {
+                                        velocity_mq::metrics::inc_messages_produced(1);
+                                        velocity_mq::metrics::inc_bytes_written(record_bytes.len() as u64);
+                                        partition_responses.push(
+                                            PartitionProduceResponse {
+                                                partition: part_data.partition,
+                                                error_code: KafkaErrorCode::None,
+                                                base_offset: res.record_offset as i64,
+                                                log_append_time_ms: -1,
+                                                log_start_offset: 0,
+                                            },
+                                        );
+                                        _next_offset = res.record_offset + 1;
+                                    }
+                                    Err(_) => {
+                                        partition_responses.push(
+                                            PartitionProduceResponse {
+                                                partition: part_data.partition,
+                                                error_code:
+                                                    KafkaErrorCode::CorruptMessage,
+                                                base_offset: -1,
+                                                log_append_time_ms: -1,
+                                                log_start_offset: 0,
+                                            },
+                                        );
+                                    }
+                                }
                             }
+
+                            topic_responses.push(TopicProduceResponse {
+                                topic: topic_data.topic.clone(),
+                                partitions: partition_responses,
+                            });
+                        }
+
+                        let produce_resp = ProduceResponse {
+                            correlation_id: produce_req.header.correlation_id,
+                            responses: topic_responses,
+                            throttle_time_ms: 0,
+                        };
+
+                        let mut resp_buf = BytesMut::with_capacity(128);
+                        KafkaEncoder::encode_produce_response(
+                            &produce_resp,
+                            &mut resp_buf,
+                        );
+                        if socket.write_all(&resp_buf).is_err() {
+                            break;
                         }
                     }
                 }
                 velocity_mq::metrics::dec_active_connections();
             }
             Err(ref e) if e.kind() == std::io::ErrorKind::WouldBlock => {
-                thread::sleep(Duration::from_millis(5));
+                thread::sleep(Duration::from_millis(1));
             }
             Err(e) => {
                 if running.load(Ordering::Relaxed) {

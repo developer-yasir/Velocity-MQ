@@ -43,11 +43,11 @@ print(f"🚀 Blasting messages into NVMe Zero-Copy WAL...")
 start = time.time()
 success_count = 0
 
+s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+s.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
+s.connect((HOST, PORT))
+
 for i in range(NUM_MESSAGES):
-    s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    s.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
-    s.connect((HOST, PORT))
-    
     frame = make_produce_frame(f"Live-Order-Event-#{i}", i)
     s.sendall(frame)
     
@@ -56,7 +56,8 @@ for i in range(NUM_MESSAGES):
         rlen = struct.unpack('>i', resp_head)[0]
         s.recv(rlen)
         success_count += 1
-    s.close()
+
+s.close()
 
 total_time = time.time() - start
 rps = int(success_count / total_time) if total_time > 0 else 0
