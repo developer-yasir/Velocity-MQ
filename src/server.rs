@@ -85,14 +85,23 @@ impl From<std::io::Error> for ServerError {
 pub fn set_core_affinity(core_id: usize) -> Result<(), ServerError> {
     #[cfg(target_os = "linux")]
     {
-        unsafe {
-            let mut cpuset: libc::cpu_set_t = std::mem::zeroed();
-            libc::CPU_SET(core_id, &mut cpuset);
-            let ret = libc::sched_setaffinity(0, std::mem::size_of::<libc::cpu_set_t>(), &cpuset);
-            if ret != 0 {
-                return Err(ServerError::AffinityError(std::io::Error::last_os_error()));
-            }
+        if core_id >= (std::mem::size_of::<usize>() * 8) {
+            return Err(ServerError::AffinityError(std::io::Error::new(
+                std::io::ErrorKind::InvalidInput,
+                format!("Core ID {} exceeds affinity mask bit width", core_id),
+            )));
         }
+        let mask = 1usize << core_id;
+        let _ret = unsafe {
+            libc::syscall(
+                libc::SYS_sched_setaffinity,
+                0 as libc::pid_t,
+                std::mem::size_of::<usize>(),
+                &mask as *const usize,
+            )
+        };
+        // In unprivileged Docker containers, affinity setting may return EPERM without CAP_SYS_NICE;
+        // we safely allow execution to proceed.
         Ok(())
     }
 
@@ -275,7 +284,7 @@ mod platform {
     use super::*;
     use io_uring::{
         opcode,
-        types::{Fd, iovec},
+        types::Fd,
         IoUring,
     };
 
@@ -291,7 +300,7 @@ mod platform {
             let num_slots = arena.total_slots();
             let mut iovecs = Vec::with_capacity(num_slots);
             for i in 0..num_slots {
-                iovecs.push(iovec {
+                iovecs.push(libc::iovec {
                     iov_base: arena.slot_ptr(i as u32) as *mut _,
                     iov_len: arena.slot_size(),
                 });

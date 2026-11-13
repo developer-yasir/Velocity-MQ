@@ -480,13 +480,15 @@ mod platform {
     };
     use std::os::unix::ffi::OsStrExt;
 
+    const O_DIRECT_FLAG: libc::c_int = 0o040000;
+
     /// Opens a file descriptor with O_DIRECT | O_CREAT | O_RDWR.
     /// Strictly bypasses the Linux page cache. No std::fs or tokio::fs!
     pub fn open_direct_file(path: &Path) -> Result<RawFd, WalError> {
         let c_path = std::ffi::CString::new(path.as_os_str().as_bytes())
             .map_err(|e| WalError::InvalidPath(e.to_string()))?;
 
-        let flags = libc::O_CREAT | libc::O_RDWR | libc::O_DIRECT;
+        let flags = libc::O_CREAT | libc::O_RDWR | O_DIRECT_FLAG;
         let mode = 0o644;
 
         let fd = unsafe { libc::open(c_path.as_ptr(), flags, mode) };
