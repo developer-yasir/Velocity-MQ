@@ -36,17 +36,17 @@ RUN apk add --no-cache \
 # Copy dependency recipe from planner
 COPY --from=planner /app/recipe.json recipe.json
 
-# Build & cache dependencies
-RUN cargo chef cook --release --target x86_64-unknown-linux-musl --recipe-path recipe.json
+# Build & cache dependencies (native musl on Alpine)
+RUN cargo chef cook --release --recipe-path recipe.json
 
 # ------------------------------------------------------------------------------
 # Stage 3: Build VelocityMQ Application Binary
 # ------------------------------------------------------------------------------
 COPY . .
-RUN cargo build --release --target x86_64-unknown-linux-musl --bin velocity_mq
+RUN cargo build --release --bin velocity_mq
 
 # Strip debug symbols and dead code to guarantee binary is <20MB
-RUN strip /app/target/x86_64-unknown-linux-musl/release/velocity_mq
+RUN strip /app/target/release/velocity_mq
 
 # ------------------------------------------------------------------------------
 # Stage 4: Minimal Distroless/Alpine Runtime (<50MB total image footprint)
@@ -65,7 +65,7 @@ RUN addgroup -g 10001 -S velocitymq && \
 WORKDIR /var/lib/velocitymq
 
 # Copy statically linked binary from builder
-COPY --from=builder --chown=velocitymq:velocitymq /app/target/x86_64-unknown-linux-musl/release/velocity_mq /usr/local/bin/velocity_mq
+COPY --from=builder --chown=velocitymq:velocitymq /app/target/release/velocity_mq /usr/local/bin/velocity_mq
 
 # Ensure execution permissions
 RUN chmod +x /usr/local/bin/velocity_mq
