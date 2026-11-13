@@ -67,8 +67,8 @@ The fastest way to launch VelocityMQ is with Docker Compose:
 
 ```bash
 # Clone the repository
-git clone https://github.com/yasir34567khan/VelocityMQ.git
-cd VelocityMQ
+git clone https://github.com/developer-yasir/Velocity-MQ.git
+cd Velocity-MQ
 
 # Launch the broker in Developer Mode
 docker compose up -d
