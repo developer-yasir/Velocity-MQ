@@ -1,0 +1,11 @@
+/target
+.env
+.env.*
+*.wal
+*.log
+*.index
+data/
+.idea/
+.vscode/
+*.swp
+*.bak
