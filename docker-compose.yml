@@ -6,6 +6,9 @@ services:
     image: velocitymq:latest
     container_name: velocitymq-broker
     restart: unless-stopped
+    privileged: true
+    security_opt:
+      - seccomp:unconfined
     ports:
       - "9092:9092"   # Kafka Wire Protocol (TCP)
       - "9093:9093"   # Prometheus HTTP Metrics & Healthcheck

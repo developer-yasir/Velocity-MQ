@@ -63,7 +63,21 @@
 
 ## 🚀 1-Click Quickstart (Docker Compose)
 
-The fastest way to launch VelocityMQ is with Docker Compose:
+### ⚡ 1-Line Instant Launch (Pre-Built Container — Zero Compilation)
+
+You do not need to clone the repository or install Rust. Run the pre-built, production-grade container in **5 seconds**:
+
+```bash
+docker run -d --name velocitymq --restart unless-stopped --privileged \
+  -p 9092:9092 -p 9093:9093 \
+  ghcr.io/developer-yasir/velocity-mq:latest
+```
+
+---
+
+### 🐳 Full Stack Launch via Docker Compose
+
+The fastest way to launch VelocityMQ with persistent local volumes:
 
 ```bash
 # Clone the repository
