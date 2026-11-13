@@ -1,7 +1,7 @@
 [package]
 name = "velocity_mq"
 version = "0.1.0"
-edition = "2024"
+edition = "2021"
 description = "Next-generation zero-copy distributed message broker in Rust"
 license = "AGPL-3.0-only"
 authors = ["Yasir Saleem <engyasirsaleem@gmail.com>"]

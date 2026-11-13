@@ -839,7 +839,7 @@ impl GroupCoordinator {
         }
 
         let member_id_str = String::from_utf8_lossy(&req.member_id);
-        match group.members.get(member_id_str.as_ref()) {
+        let response = match group.members.get(member_id_str.as_ref()) {
             Some(member) => {
                 // Wait-free atomic timestamp store
                 member.last_heartbeat_ms.store(current_time_ms(), Ordering::Release);
@@ -854,7 +854,8 @@ impl GroupCoordinator {
                 throttle_time_ms: 0,
                 error_code: KafkaErrorCode::UnknownMemberId,
             },
-        }
+        };
+        response
     }
 
     // ------------------------------------------------------------------------
