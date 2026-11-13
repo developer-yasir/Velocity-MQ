@@ -47,6 +47,8 @@ pub struct VelocityConfig {
     pub log_segment_bytes: u64,
     /// Time-based log retention in hours (default: 168 hours = 7 days).
     pub log_retention_hours: u64,
+    /// Optional high-resolution log retention in seconds (overrides hours if set, e.g. from LOG_RETENTION_MINUTES).
+    pub log_retention_seconds: Option<u64>,
     /// Maximum retention byte ceiling across all partitions (default: unlimited).
     pub log_retention_bytes: u64,
     /// Size of pre-allocated page-aligned WAL write buffer in bytes (default: 64KB).
@@ -96,6 +98,7 @@ impl Default for VelocityConfig {
             num_cores: cores,
             log_segment_bytes: 500 * 1024 * 1024, // 500 MB
             log_retention_hours: 168,             // 7 days
+            log_retention_seconds: None,
             log_retention_bytes: u64::MAX,        // Unlimited
             buffer_size: 64 * 1024,               // 64 KB
             max_connections: 10_000,
@@ -199,6 +202,16 @@ impl VelocityConfig {
         if let Ok(val) = std::env::var("LOG_RETENTION_HOURS") {
             if let Ok(hours) = val.trim().parse::<u64>() {
                 config.log_retention_hours = hours;
+            }
+        }
+        if let Ok(val) = std::env::var("LOG_RETENTION_MINUTES") {
+            if let Ok(mins) = val.trim().parse::<u64>() {
+                config.log_retention_seconds = Some(mins * 60);
+            }
+        }
+        if let Ok(val) = std::env::var("LOG_RETENTION_SECONDS") {
+            if let Ok(secs) = val.trim().parse::<u64>() {
+                config.log_retention_seconds = Some(secs);
             }
         }
         if let Ok(val) = std::env::var("LOG_RETENTION_BYTES") {
@@ -396,9 +409,13 @@ impl VelocityConfig {
 
     /// Generates a `RetentionPolicy` mapped from this system configuration.
     pub fn to_retention_policy(&self) -> RetentionPolicy {
-        RetentionPolicy::default()
+        let mut policy = RetentionPolicy::default()
             .with_retention_hours(self.log_retention_hours)
-            .with_retention_bytes(self.log_retention_bytes)
+            .with_retention_bytes(self.log_retention_bytes);
+        if let Some(secs) = self.log_retention_seconds {
+            policy = policy.with_retention_seconds(secs);
+        }
+        policy
     }
 
     /// Generates an `S3ArchiverConfig` if tiered storage is enabled.
@@ -449,6 +466,16 @@ impl VelocityConfig {
             "3 (Quorum: 2/3 NVMe commit required)"
         };
 
+        let retention_desc = if let Some(secs) = self.log_retention_seconds {
+            if secs % 60 == 0 {
+                format!("{} Minutes", secs / 60)
+            } else {
+                format!("{} Seconds", secs)
+            }
+        } else {
+            format!("{} Hours", self.log_retention_hours)
+        };
+
         format!(
             r#"
 ================================================================================
@@ -471,7 +498,7 @@ impl VelocityConfig {
   Active CPU Cores:   {} (Thread-per-Core Event Loops)
   Replication Factor: {}
   Segment Rolling:    {} MB
-  Retention Policy:   {} Hours / {:?} Bytes
+  Retention Policy:   {} / {}
   Tiered Storage:     {}
   Prometheus Metrics: {}
 ================================================================================
@@ -488,11 +515,11 @@ impl VelocityConfig {
             self.num_cores,
             replication_desc,
             self.log_segment_bytes / (1024 * 1024),
-            self.log_retention_hours,
+            retention_desc,
             if self.log_retention_bytes == u64::MAX {
-                "UNLIMITED".to_string()
+                "UNLIMITED Bytes".to_string()
             } else {
-                format!("{} MB", self.log_retention_bytes / (1024 * 1024))
+                format!("{} MB Limit", self.log_retention_bytes / (1024 * 1024))
             },
             if self.tiered_storage_enabled {
                 format!(
