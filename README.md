@@ -5,7 +5,8 @@
 [![Docker Image](https://img.shields.io/badge/docker-musl_static_%3C35MB-2496ED.svg?style=flat-square&logo=docker)](https://www.docker.com/)
 [![Metrics](https://img.shields.io/badge/observability-Prometheus_Lock--Free-E6522C.svg?style=flat-square&logo=prometheus)](https://prometheus.io/)
 [![Storage](https://img.shields.io/badge/tiered_storage-AWS_S3_Streaming-FF9900.svg?style=flat-square&logo=amazons3)](https://aws.amazon.com/s3/)
-[![License](https://img.shields.io/badge/license-MIT%2FApache--2.0-green.svg?style=flat-square)](LICENSE)
+[![License: AGPL v3](https://img.shields.io/badge/license-AGPLv3-blue.svg?style=flat-square)](LICENSE)
+[![Commercial License](https://img.shields.io/badge/commercial-license_available-gold.svg?style=flat-square)](mailto:engyasirsaleem@gmail.com)
 
 > **VelocityMQ** is an ultra-fast, zero-copy, distributed message broker built from the ground up in Rust. Designed as a modern, high-throughput alternative to Apache Kafka and Redpanda, VelocityMQ eliminates JVM garbage collection pauses, avoids OS page cache churn via direct aligned I/O, and delivers sub-10 microsecond append latencies on NVMe storage.
 
@@ -196,6 +197,12 @@ cargo test
 
 ---
 
-## 📜 License
+## 📜 Licensing & Commercial Use
 
-Distributed under the terms of both the **MIT License** and the **Apache License (Version 2.0)**.
+VelocityMQ is dual-licensed under open-source and commercial terms:
+
+1. **Open-Source (GNU AGPLv3):** Free for community, personal, and open-source usage under the terms of the [GNU Affero General Public License v3 (AGPL-3.0)](LICENSE). Any modifications or network-accessible deployments (SaaS / Cloud APIs) must make the source code publicly available under AGPLv3.
+2. **Commercial Enterprise License:** If you wish to use VelocityMQ in proprietary applications, offer managed cloud services without releasing source code, or require dedicated enterprise support and SLAs, you must purchase a Commercial License.
+
+📧 **Commercial Licensing Inquiries:** [engyasirsaleem@gmail.com](mailto:engyasirsaleem@gmail.com)  
+👤 **Author & Copyright Holder:** Yasir Saleem
